@@ -100,7 +100,11 @@ def extract_text(label_image, label_id=None):
     if texts:
         return texts[0].description.strip()
     return ""
-
+    
+@app.route('/')
+def home():
+    return "The API is live! Use the /process-image endpoint."
+    
 # Flask route
 @app.route('/process-image', methods=['POST'])
 def process_image():
