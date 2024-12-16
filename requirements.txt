@@ -4,3 +4,4 @@ opencv-python-headless
 google-cloud-vision
 numpy
 Pillow
+gunicorn
