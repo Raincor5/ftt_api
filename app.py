@@ -100,25 +100,34 @@ def extract_text(label_image, label_id=None):
     if texts:
         return texts[0].description.strip()
     return ""
-    
+
 @app.route('/')
 def home():
     return "The API is live! Use the /process-image endpoint."
-    
+
 # Flask route
 @app.route('/process-image', methods=['POST'])
 def process_image():
-    if 'image' not in request.files:
-        return jsonify({"error": "No image file provided."}), 400
+    # Check if raw image bytes are provided
+    if not request.data:
+        return jsonify({"error": "No image data provided."}), 400
 
-    image_file = request.files['image']
-    image_path = f"{LOG_DIR}/uploaded_image.png"
-    image_file.save(image_path)
+    # Decode image from raw bytes
+    try:
+        np_arr = np.frombuffer(request.data, np.uint8)
+        image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    except Exception as e:
+        return jsonify({"error": f"Failed to decode image: {str(e)}"}), 400
 
-    image = cv2.imread(image_path)
-    result = model.predict(image_path, confidence=40, overlap=30).json()
+    # Save uploaded image for debugging
+    uploaded_image_path = f"{LOG_DIR}/uploaded_image.png"
+    cv2.imwrite(uploaded_image_path, image)
+
+    # Predict using Roboflow model
+    result = model.predict(uploaded_image_path, confidence=40, overlap=30).json()
     detections = result.get("predictions", [])
 
+    # Process each detection
     results = []
     for i, detection in enumerate(detections):
         bbox = detection['x'], detection['y'], detection['width'], detection['height']
