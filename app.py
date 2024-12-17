@@ -10,6 +10,7 @@ import os
 import uuid
 import difflib
 from datetime import datetime
+import re
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -142,6 +143,7 @@ def process_image():
             # Parse label text and validate against database
             parsed_data = parse_label_text(raw_text, products)
             parsed_data['employee_name'] = find_closest_match(parsed_data['employee_name'], employees)
+            parsed_data['name'] = find_closest_match(parsed_data['name'], products)
 
             results.append({
                 "label_id": f"label_{i+1}",
@@ -238,66 +240,86 @@ def get_employees():
     employees = Employee.query.paginate(page=page, per_page=per_page, error_out=False)
     return jsonify([{"id": e.id, "name": e.name} for e in employees.items])
 
-def find_closest_match(input_name, product_names):
-    """Find the closest product name from the database."""
-    closest_match = difflib.get_close_matches(input_name, product_names, n=1, cutoff=0.6)
-    return closest_match[0] if closest_match else "Unknown Product"
+def find_closest_match(input_string, candidates):
+    """Find the closest match for a string from a list of candidates."""
+    closest_match = difflib.get_close_matches(input_string, candidates, n=1, cutoff=0.6)
+    return closest_match[0] if closest_match else ""
 
-from datetime import datetime
-
-def parse_label_text(text, product_names):
-    """Parse and extract data from label text."""
-    lines = [line.strip() for line in text.split("\n") if line.strip()]
-    name = find_closest_match(lines[0], product_names)
-    rte_status = "RTE" if "RTE" in lines[0] else "Not RTE"
-
-    # Detect defrosted or normal label
-    defrosted = "DEFROST" in text.upper()
-
-    # Extract dates and sort
+def extract_dates_with_details(lines):
+    """Extract dates while preserving time and additional info like EOD."""
+    date_pattern = r"(\d{1,2}/\d{1,2}/\d{2}(?:\s+\d{2}:\d{2})?(?:\s+\w+)?)"
     dates = []
     for line in lines:
+        matches = re.findall(date_pattern, line)
+        dates.extend([match.strip() for match in matches])
+    return dates
+
+def extract_batch_number(lines):
+    """Extract batch number using flexible matching."""
+    batch_pattern = r"(Batch No[:\s]*)([^\n]+)"
+    for line in lines:
+        match = re.search(batch_pattern, line, re.IGNORECASE)
+        if match:
+            batch_no = match.group(2).strip()
+            # Ensure batch number has at least 2 characters
+            if len(batch_no) < 2:
+                return "N/A"
+            return batch_no
+    return "N/A"
+
+
+def parse_label_text(text, product_names, employee_names):
+    """Parse and extract data from label text."""
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+
+    # Extract product name and RTE type
+    product_name = ""
+    rte_status = ""
+    for line in lines:
+        closest_product = find_closest_match(line, product_names)
+        if closest_product:
+            product_name = closest_product
+            rte_status = "RTE" if "RTE" in line else ""
+            break
+
+    # Identify label type
+    label_type = "Defrosted" if any("DEFROST" in line.upper() for line in lines) else "Normal"
+
+    # Extract employee name
+    employee_name = ""
+    for line in lines:
+        closest_employee = find_closest_match(line, employee_names)
+        if closest_employee:
+            employee_name = closest_employee
+            break
+
+    # Extract dates
+    extracted_dates = extract_dates_with_details(lines)
+
+    # Extract batch number
+    batch_no = extract_batch_number(lines)
+
+    # Find day of the week for the expiry date
+    expiry_date = None
+    expiry_day = "N/A"
+    if extracted_dates:
         try:
-            parsed_date = datetime.strptime(line[:8], "%d/%m/%y")
-            dates.append(parsed_date)
-        except (ValueError, IndexError):
-            continue
+            expiry_date_str = extracted_dates[-1].split()[0]  # Take only the date part
+            expiry_date = datetime.strptime(expiry_date_str, "%d/%m/%y")
+            expiry_day = expiry_date.strftime("%A").upper()
+        except ValueError:
+            pass  # Ignore invalid date formats
 
-    dates = sorted(dates)  # Sort dates from earliest to latest
+    return {
+        "product_name": product_name,
+        "rte_status": rte_status,
+        "employee_name": employee_name,
+        "label_type": label_type,
+        "dates": extracted_dates,
+        "batch_no": batch_no,
+        "expiry_day": expiry_day
+    }
 
-    # Extract batch number and employee name
-    batch_no = next((lines[i + 1] for i, line in enumerate(lines) if "Batch No" in line), "N/A")
-    employee_name = next((lines[i + 1] for i, line in enumerate(lines) if "PREPPED" in line or "DEFROST" in line), "N/A")
-
-    # Determine expiry status
-    today = datetime.now()
-    if defrosted:
-        status = "Being defrosted" if dates and today < dates[0] else "Expired"
-    else:
-        status = "Not expired" if dates and today < dates[-1] else "Expired"
-
-    # Construct response
-    if defrosted:
-        return {
-            "type": "Defrosted",
-            "name": name,
-            "rte_status": rte_status,
-            "batch_no": batch_no,
-            "employee_name": employee_name,
-            "dates": [d.strftime("%d/%m/%y %A") for d in dates],
-            "status": status
-        }
-    else:
-        return {
-            "type": "Normal",
-            "name": name,
-            "rte_status": rte_status,
-            "batch_no": batch_no,
-            "employee_name": employee_name,
-            "prep_date": dates[0].strftime("%d/%m/%y %A") if dates else "N/A",
-            "use_by_date": dates[-1].strftime("%d/%m/%y %A") if dates else "N/A",
-            "status": status
-        }
 
 
 if __name__ == "__main__":
