@@ -1,4 +1,6 @@
 Flask
+flask-sqlalchemy
+psycopg2-binary
 roboflow
 opencv-python-headless
 google-cloud-vision

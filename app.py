@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
 from roboflow import Roboflow
 from PIL import Image
 import cv2
@@ -136,6 +137,89 @@ def process_image():
         results.append({"label_id": f"label_{i+1}", "text": text})
 
     return jsonify(results)
+
+# Fetch environment variables or raise an error
+DB_USER = os.getenv("DB_USER")
+if not DB_USER:
+    raise ValueError("Environment variable DB_USER is not set")
+
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+if not DB_PASSWORD:
+    raise ValueError("Environment variable DB_PASSWORD is not set")
+
+DB_HOST = os.getenv("DB_HOST", "localhost")  # Fallback is fine for HOST
+DB_PORT = os.getenv("DB_PORT", "5432")       # Default PostgreSQL port
+DB_NAME = os.getenv("DB_NAME")
+if not DB_NAME:
+    raise ValueError("Environment variable DB_NAME is not set")
+
+# Configure the connection string
+app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+
+# Initialize the database
+db = SQLAlchemy(app)
+
+# Initialize Database
+db = SQLAlchemy(app)
+
+# Product Model
+class Product(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+
+# Employee Model
+class Employee(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+
+# Create Tables
+with app.app_context():
+    db.create_all()
+
+# New Endpoint to Populate Database
+@app.route("/populate", methods=["POST"])
+def populate_database():
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "Invalid JSON payload"}), 400
+
+    # Extract products and employees
+    products = data.get("products", [])
+    employees = data.get("employees", [])
+
+    try:
+        # Add products to database
+        for product in products:
+            product_name = product.get("name")
+            if product_name:
+                db.session.add(Product(name=product_name))
+
+        # Add employees to database
+        for employee in employees:
+            employee_name = employee.get("name")
+            if employee_name:
+                db.session.add(Employee(name=employee_name))
+
+        db.session.commit()
+        return jsonify({"message": "Database populated successfully!"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+# Endpoint to Retrieve Data for Testing
+@app.route("/products", methods=["GET"])
+def get_products():
+    products = Product.query.all()
+    return jsonify([{"id": p.id, "name": p.name} for p in products])
+
+@app.route("/employees", methods=["GET"])
+def get_employees():
+    employees = Employee.query.all()
+    return jsonify([{"id": e.id, "name": e.name} for e in employees])
+
 
 if __name__ == "__main__":
     app.run(debug=True)
