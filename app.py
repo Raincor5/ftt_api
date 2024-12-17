@@ -141,7 +141,7 @@ def process_image():
             raw_text = extract_text(label_image, f"label_{i+1}")
 
             # Parse label text and validate against database
-            parsed_data = parse_label_text(raw_text, products)
+            parsed_data = parse_label_text(raw_text, products, employees)
             parsed_data['employee_name'] = find_closest_match(parsed_data['employee_name'], employees)
             parsed_data['name'] = find_closest_match(parsed_data['name'], products)
 
