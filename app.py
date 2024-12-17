@@ -8,6 +8,8 @@ from google.cloud import vision
 from google.cloud.vision_v1.types import Image as VisionImage
 import os
 import uuid
+import difflib
+from datetime import datetime
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -106,37 +108,52 @@ def extract_text(label_image, label_id=None):
 def home():
     return "The API is live! Use the /process-image or /populate endpoint."
 
-# Flask route
+
 @app.route('/process-image', methods=['POST'])
 def process_image():
     # Check if raw image bytes are provided
     if not request.data:
         return jsonify({"error": "No image data provided."}), 400
 
-    # Decode image from raw bytes
     try:
+        # Decode image from raw bytes
         np_arr = np.frombuffer(request.data, np.uint8)
         image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+        # Save uploaded image for debugging
+        uploaded_image_path = f"{LOG_DIR}/uploaded_image.png"
+        cv2.imwrite(uploaded_image_path, image)
+
+        # Predict using Roboflow model
+        result = model.predict(uploaded_image_path, confidence=40, overlap=30).json()
+        detections = result.get("predictions", [])
+
+        # Fetch product and employee names from the database
+        products = [product.name for product in Product.query.all()]
+        employees = [employee.name for employee in Employee.query.all()]
+
+        # Process each detection
+        results = []
+        for i, detection in enumerate(detections):
+            bbox = detection['x'], detection['y'], detection['width'], detection['height']
+            label_image = preprocess_label(image, bbox, f"label_{i+1}")
+            raw_text = extract_text(label_image, f"label_{i+1}")
+
+            # Parse label text and validate against database
+            parsed_data = parse_label_text(raw_text, products)
+            parsed_data['employee_name'] = find_closest_match(parsed_data['employee_name'], employees)
+
+            results.append({
+                "label_id": f"label_{i+1}",
+                "raw_text": raw_text,
+                "parsed_data": parsed_data
+            })
+
+        return jsonify(results), 200
+
     except Exception as e:
-        return jsonify({"error": f"Failed to decode image: {str(e)}"}), 400
+        return jsonify({"error": str(e)}), 500
 
-    # Save uploaded image for debugging
-    uploaded_image_path = f"{LOG_DIR}/uploaded_image.png"
-    cv2.imwrite(uploaded_image_path, image)
-
-    # Predict using Roboflow model
-    result = model.predict(uploaded_image_path, confidence=40, overlap=30).json()
-    detections = result.get("predictions", [])
-
-    # Process each detection
-    results = []
-    for i, detection in enumerate(detections):
-        bbox = detection['x'], detection['y'], detection['width'], detection['height']
-        label_image = preprocess_label(image, bbox, f"label_{i+1}")
-        text = extract_text(label_image, f"label_{i+1}")
-        results.append({"label_id": f"label_{i+1}", "text": text})
-
-    return jsonify(results)
 
 # Fetch environment variables or raise an error
 DB_USER = os.getenv("DB_USER")
@@ -220,6 +237,67 @@ def get_employees():
     per_page = request.args.get("per_page", 10, type=int)
     employees = Employee.query.paginate(page=page, per_page=per_page, error_out=False)
     return jsonify([{"id": e.id, "name": e.name} for e in employees.items])
+
+def find_closest_match(input_name, product_names):
+    """Find the closest product name from the database."""
+    closest_match = difflib.get_close_matches(input_name, product_names, n=1, cutoff=0.6)
+    return closest_match[0] if closest_match else "Unknown Product"
+
+from datetime import datetime
+
+def parse_label_text(text, product_names):
+    """Parse and extract data from label text."""
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    name = find_closest_match(lines[0], product_names)
+    rte_status = "RTE" if "RTE" in lines[0] else "Not RTE"
+
+    # Detect defrosted or normal label
+    defrosted = "DEFROST" in text.upper()
+
+    # Extract dates and sort
+    dates = []
+    for line in lines:
+        try:
+            parsed_date = datetime.strptime(line[:8], "%d/%m/%y")
+            dates.append(parsed_date)
+        except (ValueError, IndexError):
+            continue
+
+    dates = sorted(dates)  # Sort dates from earliest to latest
+
+    # Extract batch number and employee name
+    batch_no = next((lines[i + 1] for i, line in enumerate(lines) if "Batch No" in line), "N/A")
+    employee_name = next((lines[i + 1] for i, line in enumerate(lines) if "PREPPED" in line or "DEFROST" in line), "N/A")
+
+    # Determine expiry status
+    today = datetime.now()
+    if defrosted:
+        status = "Being defrosted" if dates and today < dates[0] else "Expired"
+    else:
+        status = "Not expired" if dates and today < dates[-1] else "Expired"
+
+    # Construct response
+    if defrosted:
+        return {
+            "type": "Defrosted",
+            "name": name,
+            "rte_status": rte_status,
+            "batch_no": batch_no,
+            "employee_name": employee_name,
+            "dates": [d.strftime("%d/%m/%y %A") for d in dates],
+            "status": status
+        }
+    else:
+        return {
+            "type": "Normal",
+            "name": name,
+            "rte_status": rte_status,
+            "batch_no": batch_no,
+            "employee_name": employee_name,
+            "prep_date": dates[0].strftime("%d/%m/%y %A") if dates else "N/A",
+            "use_by_date": dates[-1].strftime("%d/%m/%y %A") if dates else "N/A",
+            "status": status
+        }
 
 
 if __name__ == "__main__":
