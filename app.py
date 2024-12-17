@@ -255,7 +255,7 @@ def find_closest_match(input_string, candidates):
 
 def extract_dates_with_details(lines):
     """Extract dates while preserving time and additional info like EOD."""
-    date_pattern = r"(\d{1,2}/\d{1,2}/\d{2}(?:\s+\d{2}:\d{2})?(?:\s+\w+)?)"
+    date_pattern = r"(\d{1,2}/\d{1,2}/\d{2}(?:\s+\d{2}:\d{2})?(?:\s+[A-Za-z.\s]+)?)"
     dates = []
     for line in lines:
         matches = re.findall(date_pattern, line)
