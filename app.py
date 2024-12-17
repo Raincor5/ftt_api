@@ -140,16 +140,24 @@ def process_image():
             label_image = preprocess_label(image, bbox, f"label_{i+1}")
             raw_text = extract_text(label_image, f"label_{i+1}")
 
+            # Skip empty raw_text
+            if not raw_text:
+                continue
+
             # Parse label text and validate against database
             parsed_data = parse_label_text(raw_text, products, employees)
             parsed_data['employee_name'] = find_closest_match(parsed_data['employee_name'], employees)
             parsed_data['product_name'] = find_closest_match(parsed_data['product_name'], products)
 
-            results.append({
-                "label_id": f"label_{i+1}",
-                "raw_text": raw_text,
-                "parsed_data": parsed_data
-            })
+            # Check if the label data is fully constructed
+            if (parsed_data['product_name'] and
+                parsed_data['employee_name'] and
+                parsed_data['dates']):
+                results.append({
+                    "label_id": f"label_{i+1}",
+                    "raw_text": raw_text,
+                    "parsed_data": parsed_data
+                })
 
         return jsonify(results), 200
 
