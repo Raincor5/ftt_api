@@ -160,8 +160,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{DB_USER}:{DB_PASSWORD}@{
 # Initialize the database
 db = SQLAlchemy(app)
 
-# Initialize Database
-db = SQLAlchemy(app)
 
 # Product Model
 class Product(db.Model):
