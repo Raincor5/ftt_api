@@ -115,14 +115,14 @@ def populate_database():
 def get_products():
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 10, type=int)
-    products = Product.query.paginate(page, per_page, False)
+    products = Product.query.paginate(page=page, per_page=per_page, error_out=False)
     return jsonify([{"id": p.id, "name": p.name} for p in products.items])
 
 @app.route("/employees", methods=["GET"])
 def get_employees():
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 10, type=int)
-    employees = Employee.query.paginate(page, per_page, False)
+    employees = Employee.query.paginate(page=page, per_page=per_page, error_out=False)
     return jsonify([{"id": e.id, "name": e.name} for e in employees.items])
 
 @app.route("/process-image", methods=["POST"])
