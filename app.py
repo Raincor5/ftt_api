@@ -143,7 +143,7 @@ def process_image():
             # Parse label text and validate against database
             parsed_data = parse_label_text(raw_text, products, employees)
             parsed_data['employee_name'] = find_closest_match(parsed_data['employee_name'], employees)
-            parsed_data['name'] = find_closest_match(parsed_data['name'], products)
+            parsed_data['product_name'] = find_closest_match(parsed_data['product_name'], products)
 
             results.append({
                 "label_id": f"label_{i+1}",
