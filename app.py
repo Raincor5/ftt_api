@@ -365,7 +365,7 @@ def save_label():
             return jsonify({"error": "Invalid structure for parsed_data"}), 400
 
         # Insert into MongoDB
-        existing_label = collection.find_one({"uniqueKey": data["uniqueKey"]})
+        existing_label = collection.find_one({"label_id": data["label_id"]})
         if existing_label:
             return jsonify({"message": "Duplicate label. Skipping insertion."}), 409  # HTTP 409 Conflict
 
