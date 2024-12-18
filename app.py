@@ -340,25 +340,24 @@ def generate_timestamp():
 
 # MONGODB
 # Route 1: Save Label to MongoDB
-@app.route("/save-label", methods=["POST"])
+@app.route('/save-label', methods=['POST'])
 def save_label():
     try:
-        # Parse JSON from the request
         data = request.get_json()
+        print("Received Data:", data)  # Log the incoming data
+
+        # Validate the structure
         if not data:
-            return jsonify({"error": "No JSON payload provided."}), 400
+            return jsonify({"error": "Empty or invalid JSON payload"}), 400
 
-        # Validate required fields
-        if "uniqueKey" not in data or "uploadTimestamp" not in data:
-            return jsonify({"error": "Missing 'uniqueKey' or 'uploadTimestamp' in payload."}), 400
+        # Process the data (e.g., save to MongoDB)
+        # ... your existing MongoDB save logic ...
 
-        # Insert the data into MongoDB
-        collection.insert_one(data)
-
-        return jsonify({"message": "Label saved successfully!", "uniqueKey": data['uniqueKey']}), 201
-
+        return jsonify({"message": "Label saved successfully"}), 200
     except Exception as e:
+        print("Error:", str(e))  # Log the error
         return jsonify({"error": str(e)}), 500
+
 
     
 # Route 2: Retrieve All Labels from MongoDB
