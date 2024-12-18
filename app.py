@@ -352,7 +352,7 @@ def save_label():
             return jsonify({"error": "Invalid or empty JSON payload"}), 400
 
         # Check for required fields
-        required_keys = ["uniqueKey", "label_id", "raw_text", "parsed_data"]
+        required_keys = ["label_id", "raw_text", "parsed_data"]
         missing_keys = [key for key in required_keys if key not in data]
         if missing_keys:
             print("Missing Keys:", missing_keys)  # Log missing keys
