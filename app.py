@@ -24,7 +24,7 @@ ROBOFLOW_VERSION_NUMBER = os.getenv("ROBOFLOW_VERSION_NUMBER")
 
 MONGO_URI = os.getenv("MONGO_URI")  # Replace with your MongoDB Atlas URI
 client = MongoClient(MONGO_URI)
-db = client['ftt-mongo']  # Database name
+db = client['ftt_mongo']  # Database name
 collection = db['labelData']      # Collection name
 # Initialize Roboflow and Google Cloud Vision client
 rf = Roboflow(api_key=ROBOFLOW_API_KEY)
@@ -334,9 +334,6 @@ def parse_label_text(text, product_names, employee_names):
     }
 
 
-# Utility: Generate timestamp
-def generate_timestamp():
-    return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
 # MONGODB
 # Route 1: Save Label to MongoDB
