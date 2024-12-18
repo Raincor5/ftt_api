@@ -343,15 +343,33 @@ def generate_timestamp():
 @app.route('/save-label', methods=['POST'])
 def save_label():
     try:
+        # Parse incoming JSON payload
         data = request.get_json()
-        print("Received Data:", data)  # Log the incoming data
+        print("Received Data:", data)  # Log the incoming data for debugging
 
-        # Validate the structure
-        if not data:
-            return jsonify({"error": "Empty or invalid JSON payload"}), 400
+        # Validate the payload
+        if not data or not isinstance(data, dict):
+            return jsonify({"error": "Invalid or empty JSON payload"}), 400
 
-        # Process the data (e.g., save to MongoDB)
-        # ... your existing MongoDB save logic ...
+        # Check for required fields
+        required_keys = ["uniqueKey", "label_id", "raw_text", "parsed_data"]
+        missing_keys = [key for key in required_keys if key not in data]
+        if missing_keys:
+            return jsonify({"error": f"Missing keys: {', '.join(missing_keys)}"}), 400
+
+        # Insert into MongoDB
+        existing_label = collection.find_one({"uniqueKey": data["uniqueKey"]})
+        if existing_label:
+            return jsonify({"message": "Duplicate label. Skipping insertion."}), 409  # HTTP 409 Conflict
+
+        # Add timestamp to the payload if not present
+        if "uploadTimestamp" not in data["parsed_data"]:
+            from datetime import datetime
+            data["parsed_data"]["uploadTimestamp"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # Insert the document into MongoDB
+        result = collection.insert_one(data)
+        print("Inserted ID:", result.inserted_id)  # Log the inserted document ID
 
         return jsonify({"message": "Label saved successfully"}), 200
     except Exception as e:
