@@ -7,3 +7,5 @@ google-cloud-vision
 numpy
 Pillow
 gunicorn
+pymongo
+flask-pymongo

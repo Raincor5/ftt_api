@@ -11,6 +11,7 @@ import uuid
 import difflib
 from datetime import datetime
 import re
+from pymongo import MongoClient
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -21,6 +22,10 @@ ROBOFLOW_API_KEY = os.getenv("ROBOFLOW_API_KEY")
 ROBOFLOW_PROJECT_NAME = os.getenv("ROBOFLOW_PROJECT_NAME")
 ROBOFLOW_VERSION_NUMBER = os.getenv("ROBOFLOW_VERSION_NUMBER")
 
+MONGO_URI = os.getenv("MONGO_URI")  # Replace with your MongoDB Atlas URI
+client = MongoClient(MONGO_URI)
+db = client['ftt-mongo']  # Database name
+collection = db['labelData']      # Collection name
 # Initialize Roboflow and Google Cloud Vision client
 rf = Roboflow(api_key=ROBOFLOW_API_KEY)
 project = rf.workspace().project(ROBOFLOW_PROJECT_NAME)
@@ -107,7 +112,7 @@ def extract_text(label_image, label_id=None):
 
 @app.route('/')
 def home():
-    return "The API is live! Use the /process-image or /populate endpoint."
+    return "The API is live! Use the /process-image, /populate, /save-labels or /get-labels endpoints."
 
 
 @app.route('/process-image', methods=['POST'])
@@ -329,6 +334,43 @@ def parse_label_text(text, product_names, employee_names):
     }
 
 
+# Utility: Generate timestamp
+def generate_timestamp():
+    return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+# MONGODB
+# Route 1: Save Label to MongoDB
+@app.route("/save-label", methods=["POST"])
+def save_label():
+    try:
+        # Parse JSON from the request
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON payload provided."}), 400
+
+        # Validate required fields
+        if "uniqueKey" not in data or "uploadTimestamp" not in data:
+            return jsonify({"error": "Missing 'uniqueKey' or 'uploadTimestamp' in payload."}), 400
+
+        # Insert the data into MongoDB
+        collection.insert_one(data)
+
+        return jsonify({"message": "Label saved successfully!", "uniqueKey": data['uniqueKey']}), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    
+# Route 2: Retrieve All Labels from MongoDB
+@app.route("/get-labels", methods=["GET"])
+def get_labels():
+    try:
+        # Fetch all documents from the MongoDB collection
+        labels = list(collection.find({}, {"_id": 0}))  # Exclude MongoDB "_id" field
+        return jsonify(labels), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
