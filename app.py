@@ -355,7 +355,14 @@ def save_label():
         required_keys = ["uniqueKey", "label_id", "raw_text", "parsed_data"]
         missing_keys = [key for key in required_keys if key not in data]
         if missing_keys:
+            print("Missing Keys:", missing_keys)  # Log missing keys
             return jsonify({"error": f"Missing keys: {', '.join(missing_keys)}"}), 400
+
+        # Validate parsed_data structure
+        parsed_data = data.get("parsed_data", {})
+        if not isinstance(parsed_data, dict):
+            print("Invalid parsed_data structure:", parsed_data)  # Log parsed_data issues
+            return jsonify({"error": "Invalid structure for parsed_data"}), 400
 
         # Insert into MongoDB
         existing_label = collection.find_one({"uniqueKey": data["uniqueKey"]})
@@ -363,7 +370,7 @@ def save_label():
             return jsonify({"message": "Duplicate label. Skipping insertion."}), 409  # HTTP 409 Conflict
 
         # Add timestamp to the payload if not present
-        if "uploadTimestamp" not in data["parsed_data"]:
+        if "uploadTimestamp" not in parsed_data:
             from datetime import datetime
             data["parsed_data"]["uploadTimestamp"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -372,7 +379,9 @@ def save_label():
         print("Inserted ID:", result.inserted_id)  # Log the inserted document ID
 
         return jsonify({"message": "Label saved successfully"}), 200
+
     except Exception as e:
+        # Log the error and return a 500 Internal Server Error
         print("Error:", str(e))  # Log the error
         return jsonify({"error": str(e)}), 500
 
