@@ -8,4 +8,5 @@ numpy
 Pillow
 gunicorn
 pymongo
+pymongo[srv]
 flask-pymongo
