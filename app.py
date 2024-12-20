@@ -13,6 +13,10 @@ from datetime import datetime
 import re
 from pymongo import MongoClient
 import certifi
+import logging
+
+# TODO: Change all the print statements with app.logger.debug
+
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -421,18 +425,19 @@ def get_labels():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
+
 @app.route('/delete-label/<label_id>', methods=['DELETE'])
 def delete_label(label_id):
     collection = get_mongo_collection()
     try:
         decoded_label_id = unquote(label_id)
-        print(f"Decoded label_id from request: {decoded_label_id}")
+        app.logger.debug(f"Decoded label_id from request: {decoded_label_id}")
 
         # Check existing label_ids in the database
         all_labels = collection.find({}, {"label_id": 1, "_id": 0})
         for label in all_labels:
-            print(f"Existing label_id in database: {label['label_id']}")
+            app.logger.debug(f"Existing label_id in database: {label['label_id']}")
 
         # Proceed with deletion
         result = collection.delete_one({"label_id": decoded_label_id})
@@ -444,4 +449,7 @@ def delete_label(label_id):
 
 
 if __name__ == "__main__":
+    gunicorn_logger = logging.getLogger('gunicorn.error')
+    app.logger.handlers = gunicorn_logger.handlers
+    app.logger.setLevel(gunicorn_logger.level)
     app.run(debug=True)
