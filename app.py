@@ -410,18 +410,6 @@ def save_label():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/delete-label/<label_id>', methods=['DELETE'])
-def delete_label(label_id):
-    try:
-        # Find and delete the label by label_id
-        collection = get_mongo_collection()
-        result = collection.delete_one({"label_id": label_id})
-        if result.deleted_count == 0:
-            return jsonify({"error": "Label not found"}), 404
-        return jsonify({"message": "Label deleted successfully"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 
 @app.route('/get-labels', methods=['GET'])
 def get_labels():
