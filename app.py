@@ -13,6 +13,7 @@ from datetime import datetime
 import re
 from pymongo import MongoClient
 import certifi
+from urllib.parse import unquote
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -423,16 +424,22 @@ def delete_label(label_id):
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/get-labels', methods=['GET'])
-def get_labels():
-    try:
-        # Fetch all documents from the MongoDB collection
-        collection = get_mongo_collection()
-        labels = list(collection.find({}, {"_id": 0}))  # Exclude MongoDB "_id" field
-        return jsonify(labels), 200
 
+
+@app.route('/delete-label/<label_id>', methods=['DELETE'])
+def delete_label(label_id):
+    try:
+        # Decode the URL-encoded label_id
+        decoded_label_id = unquote(label_id)
+
+        # Find and delete the label
+        result = collection.delete_one({"label_id": decoded_label_id})
+        if result.deleted_count == 0:
+            return jsonify({"error": "Label not found"}), 404
+        return jsonify({"message": "Label deleted successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     app.run(debug=True)
