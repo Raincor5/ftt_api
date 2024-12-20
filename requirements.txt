@@ -10,3 +10,4 @@ gunicorn
 pymongo
 pymongo[srv]
 flask-pymongo
+certify

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, g
 from flask_sqlalchemy import SQLAlchemy
 from roboflow import Roboflow
 from PIL import Image
@@ -12,6 +12,7 @@ import difflib
 from datetime import datetime
 import re
 from pymongo import MongoClient
+import certifi
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -23,9 +24,35 @@ ROBOFLOW_PROJECT_NAME = os.getenv("ROBOFLOW_PROJECT_NAME")
 ROBOFLOW_VERSION_NUMBER = os.getenv("ROBOFLOW_VERSION_NUMBER")
 
 MONGO_URI = os.getenv("MONGO_URI")  # Replace with your MongoDB Atlas URI
-client = MongoClient(MONGO_URI)
-db = client['ftt_mongo']  # Database name
-collection = db['labelData']      # Collection name
+# MongoClient initialization in Flask lifecycle hooks
+def get_mongo_client():
+    """Get or create a MongoClient for the current request."""
+    if not hasattr(g, 'mongo_client'):
+        g.mongo_client = MongoClient(
+            MONGO_URI,
+            tls=True,
+            tlsCAFile=certifi.where()
+        )
+    return g.mongo_client
+
+def get_mongo_collection():
+    """Get the MongoDB collection."""
+    mongo_client = get_mongo_client()
+    mongo_db = mongo_client['ftt_mongo']  # Database name
+    return mongo_db['labelData']  # Collection name
+
+@app.before_request
+def before_request():
+    """Ensure MongoClient is initialized for each request."""
+    get_mongo_client()
+
+@app.teardown_appcontext
+def teardown_mongo_client(exception):
+    """Close the MongoClient after the request ends."""
+    mongo_client = getattr(g, 'mongo_client', None)
+    if mongo_client is not None:
+        mongo_client.close()
+
 # Initialize Roboflow and Google Cloud Vision client
 rf = Roboflow(api_key=ROBOFLOW_API_KEY)
 project = rf.workspace().project(ROBOFLOW_PROJECT_NAME)
@@ -336,7 +363,6 @@ def parse_label_text(text, product_names, employee_names):
 
 
 # MONGODB
-# Route 1: Save Label to MongoDB
 @app.route('/save-label', methods=['POST'])
 def save_label():
     try:
@@ -362,6 +388,7 @@ def save_label():
             return jsonify({"error": "Invalid structure for parsed_data"}), 400
 
         # Insert into MongoDB
+        collection = get_mongo_collection()
         existing_label = collection.find_one({"label_id": data["label_id"]})
         if existing_label:
             return jsonify({"message": "Duplicate label. Skipping insertion."}), 409  # HTTP 409 Conflict
@@ -383,12 +410,11 @@ def save_label():
         return jsonify({"error": str(e)}), 500
 
 
-    
-# Route 2: Retrieve All Labels from MongoDB
-@app.route("/get-labels", methods=["GET"])
+@app.route('/get-labels', methods=['GET'])
 def get_labels():
     try:
         # Fetch all documents from the MongoDB collection
+        collection = get_mongo_collection()
         labels = list(collection.find({}, {"_id": 0}))  # Exclude MongoDB "_id" field
         return jsonify(labels), 200
 
