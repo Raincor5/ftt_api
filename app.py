@@ -425,21 +425,5 @@ def delete_label(label_id):
 
 
 
-
-@app.route('/delete-label/<label_id>', methods=['DELETE'])
-def delete_label(label_id):
-    try:
-        # Decode the URL-encoded label_id
-        decoded_label_id = unquote(label_id)
-
-        # Find and delete the label
-        result = collection.delete_one({"label_id": decoded_label_id})
-        if result.deleted_count == 0:
-            return jsonify({"error": "Label not found"}), 404
-        return jsonify({"message": "Label deleted successfully"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 if __name__ == "__main__":
     app.run(debug=True)
