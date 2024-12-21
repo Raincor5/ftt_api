@@ -426,23 +426,28 @@ def get_labels():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/delete-label/<label_id>', methods=['DELETE'])
-def delete_label(label_id):
-    collection = get_mongo_collection()
+@app.route('/delete-label', methods=['POST'])
+def delete_label():
     try:
-        decoded_label_id = unquote(label_id)
-        app.logger.debug(f"Decoded label_id from request: {decoded_label_id}")
+        # Parse request JSON
+        collection = get_mongo_collection()
+        data = request.get_json()
+        if not data or "label_ids" not in data:
+            return jsonify({"error": "Invalid request payload. Expected 'label_ids' field."}), 400
 
-        # Check existing label_ids in the database
-        all_labels = collection.find({}, {"label_id": 1, "_id": 0})
-        for label in all_labels:
-            app.logger.debug(f"Existing label_id in database: {label['label_id']}")
+        label_ids = data["label_ids"]
+        if not isinstance(label_ids, list) or not label_ids:
+            return jsonify({"error": "'label_ids' must be a non-empty list."}), 400
 
-        # Proceed with deletion
-        result = collection.delete_one({"label_id": decoded_label_id})
+        # Decode label_ids (if needed) and delete them
+        decoded_label_ids = [unquote(label_id) for label_id in label_ids]
+        result = collection.delete_many({"label_id": {"$in": decoded_label_ids}})
+
+        # Response with number of deletions
         if result.deleted_count == 0:
-            return jsonify({"error": "Label not found"}), 404
-        return jsonify({"message": "Label deleted successfully"}), 200
+            return jsonify({"message": "No labels were deleted. Ensure the label IDs exist."}), 404
+
+        return jsonify({"message": f"{result.deleted_count} label(s) deleted successfully."}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
